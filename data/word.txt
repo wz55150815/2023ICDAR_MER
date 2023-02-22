@@ -1,0 +1,7 @@
+above
+below
+sub
+sup
+l_sup
+inside
+right
