@@ -35,9 +35,9 @@ class Backbone(nn.Module):
         # 这里使用bce loss而不用交叉熵是因为后面的struct部分是已经固定好的，所以只要预测是0还是1即可
         struct_average_loss = self.bce_loss(struct_probs, labels[:, :, 4:].float())
         if labels_mask is not None:
-            struct_average_loss = (struct_average_loss * labels_mask[:, :, 0][:, :, None]).sum() / (
-                    labels_mask[:, :, 0].sum() + 1e-10)
-            # struct_average_loss = struct_average_loss[labels_mask[:, :, 0].bool()].sum() / (labels_mask[:, :, 0].sum() + 1e-10)
+            # struct_average_loss = (struct_average_loss * labels_mask[:, :, 0][:, :, None]).sum() / (
+            #         labels_mask[:, :, 0].sum() + 1e-10)
+            struct_average_loss = struct_average_loss[labels_mask[:, :, 0].bool()].sum() / (labels_mask[:, :, 0].sum() + 1e-10)
 
         if is_train:
             parent_average_loss = self.cross_entropy_loss(c2p_probs.contiguous().view(-1, word_probs.shape[-1]),
@@ -55,7 +55,6 @@ class Backbone(nn.Module):
         return (word_probs, struct_probs), (word_average_loss, struct_average_loss)
 
     def cal_kl_loss(self, child_alphas, parent_alphas, labels, image_mask, label_mask):
-
         batch_size, steps, height, width = child_alphas.shape
         device = self.params["device"]
         new_child_alphas = torch.zeros((batch_size, steps, height, width)).to(device)
@@ -71,10 +70,10 @@ class Backbone(nn.Module):
         new_child_alphas = new_child_alphas[:, 1:, :, :]
         new_parent_alphas = parent_alphas[:, 1:, :, :]
 
-        KL_alpha = new_child_alphas * (
-                torch.log(new_child_alphas + 1e-10) - torch.log(new_parent_alphas + 1e-10)) * image_mask
+        # KL_alpha = new_child_alphas * (
+        #         torch.log(new_child_alphas + 1e-10) - torch.log(new_parent_alphas + 1e-10)) * image_mask
         # KL_loss = (KL_alpha.sum(-1).sum(-1) * label_mask[:, :-1, 0]).sum(-1).sum(-1) / (label_mask.sum() - batch_size)
-
+        KL_alpha = new_parent_alphas * (torch.log(new_parent_alphas + 1e-10) - torch.log(new_child_alphas + 1e-10)) * image_mask
         indices = label_mask[:, :-1, 0].nonzero().t()
         indices_x, indices_y = indices[0], indices[1]
         KL_loss = (KL_alpha.sum(-1).sum(-1)[indices_x, indices_y]).sum() / (label_mask.sum() - batch_size)

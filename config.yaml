@@ -6,7 +6,7 @@ seed: 20200814
 
 # 训练参数
 epochs: 200
-batch_size: 4
+batch_size: 6
 workers: 0
 optimizer: Adadelta
 lr: 1
@@ -27,12 +27,12 @@ gradient_clip: True
 use_label_mask: False
 
 # 训练数据
-train_image_path: '.\data\offline-train.pkl'
-train_label_path: '.\data\train_labels.pkl'
-eval_image_path: '.\data\offline-train.pkl'
-eval_label_path: '.\data\train_labels.pkl'
+train_image_path: './data/train_pkl'
+train_label_path: './data/train_labels.pkl'
+eval_image_path: './data/offline-test.pkl'
+eval_label_path: './data/test_labels.pkl'
 
-word_path: '.\data\dictionary.txt'
+word_path: './/data//dictionary.txt'
 
 # 选择encoder
 encoder:

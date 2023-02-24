@@ -8,7 +8,6 @@ class SAN_decoder(nn.Module):
 
     def __init__(self, params):
         super().__init__()
-
         self.params = params
         self.input_size = params['decoder']['input_size']
         self.hidden_size = params['decoder']['hidden_size']
@@ -18,8 +17,6 @@ class SAN_decoder(nn.Module):
         self.device = params['device']
         self.struct_num = params['struct_num']
         self.words = tokenizer
-        with open(r".\data\word.txt") as f:
-            structs = f.readlines()
 
         self.ratio = params['densenet']['ratio'] if params['encoder']['net'] == 'DenseNet' else 16 * params['resnet'][
             'conv1_stride']
@@ -30,7 +27,7 @@ class SAN_decoder(nn.Module):
         self.init_weight = nn.Linear(self.out_channel, self.hidden_size)
 
         # word embedding
-        self.embedding = nn.Embedding(self.word_num, self.input_size, padding_idx=self.words.pad_id)
+        self.embedding = nn.Embedding(self.word_num, self.input_size)
 
         # word gru
         self.word_input_gru = nn.GRUCell(self.input_size, self.hidden_size)

@@ -36,12 +36,12 @@ params['device'] = device
 
 train_loader, eval_loader = get_dataset(params)
 
-model = Backbone(params)
+model = Backbone(params).to(device)
 now = time.strftime("%Y-%m-%d-%H-%M", time.localtime())
 model.name = f'{params["experiment"]}_{now}_Encoder-{params["encoder"]["net"]}_Decoder-{params["decoder"]["net"]}_' \
              f'max_size-{params["image_height"]}-{params["image_width"]}'
 print(model.name)
-model = model.to(device)
+print("model total parameters:", sum((x.numel() for x in model.parameters())))
 
 if args.check:
     writer = None
@@ -71,23 +71,19 @@ if params['finetune'] and (checkpoints_root_path / "model.pkl").exists():
 min_score = 0
 min_step = 0
 for epoch in range(params['epochs']):
-    torch.save(model.state_dict(), ".\\checkpoints\\model.pkl")
-    torch.save(optimizer.state_dict(), ".\\checkpoints\\optim.pkl")
     train_loss, train_word_score, train_node_score, train_expRate = train(params, model, optimizer, epoch, train_loader, writer=writer)
     if epoch > 150:
-        # eval_loss, eval_word_score, eval_node_score, eval_expRate = eval(params, model, epoch, eval_loader, writer=writer)
-        # print(f'Epoch: {epoch+1}  loss: {eval_loss:.4f}  word score: {eval_word_score:.4f}  struct score: {eval_node_score:.4f} '
-        #       f'ExpRate: {eval_expRate:.4f}')
+        eval_loss, eval_word_score, eval_node_score, eval_expRate = eval(params, model, epoch, eval_loader, writer=writer)
+        print(f'Epoch: {epoch+1}  loss: {eval_loss:.4f}  word score: {eval_word_score:.4f}  struct score: {eval_node_score:.4f} '
+              f'ExpRate: {eval_expRate:.4f}')
 
-        # if eval_expRate >= min_score:
-        if train_expRate >= min_score:
-            # min_score = eval_expRate
-            min_score = train_expRate
+        if eval_expRate >= min_score:
+            min_score = eval_expRate
             # save_checkpoint(model, optimizer, eval_word_score, eval_node_score, eval_expRate, epoch+1,
             #                 optimizer_save=params['optimizer_save'], path=params['checkpoint_dir'])
 
-            torch.save(model.state_dict(), ".\\checkpoints\\model.pkl")
-            torch.save(optimizer.state_dict(), ".\\checkpoints\\optim.pkl")
+            torch.save(model.state_dict(), "./checkpoints/model.pkl")
+            torch.save(optimizer.state_dict(), "./checkpoints/optim.pkl")
             min_step = 0
 
         elif min_score != 0 and 'lr_decay' in params and params['lr_decay'] == 'step':

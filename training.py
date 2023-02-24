@@ -21,6 +21,7 @@ def train(params, model, optimizer, epoch, train_loader, writer=None):
             batch, time = labels.shape[:2]
             if 'lr_decay' not in params or params['lr_decay'] == 'cosine':
                 updata_lr(optimizer, epoch, batch_idx, len(train_loader), params['epochs'], params['lr'])
+                pass
             optimizer.zero_grad()
 
             probs, loss = model(images, image_masks, labels, label_masks)
@@ -71,7 +72,6 @@ def train(params, model, optimizer, epoch, train_loader, writer=None):
 
 
 def eval(params, model, epoch, eval_loader, writer=None):
-
     model.eval()
     device = params['device']
     loss_meter = Meter()

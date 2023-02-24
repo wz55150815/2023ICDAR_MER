@@ -132,8 +132,8 @@ def cal_score(probs, labels, mask):
     struct_pred = struct_probs > 0.5
 
     # SequenceMatcher是计算两个序列相似度的函数
-    word_scores = [SequenceMatcher(None, s1[:int(np.sum(s3))], s2[:int(np.sum(s3))], autojunk=False).ratio() * (
-            len(s1[:int(np.sum(s3))]) + len(s2[:int(np.sum(s3))])) / len(s1[:int(np.sum(s3))]) / 2
+    word_scores = [SequenceMatcher(None, s1[:int(np.sum(s3[0]))], s2[:int(np.sum(s3[0]))], autojunk=False).ratio() * (
+            len(s1[:int(np.sum(s3[0]))]) + len(s2[:int(np.sum(s3[0]))])) / len(s1[:int(np.sum(s3[0]))]) / 2
                    for s1, s2, s3 in zip(word_label.cpu().detach().numpy(), word_pred.cpu().detach().numpy(),
                                          mask.cpu().detach().numpy())]
     struct_scores = [SequenceMatcher(None, s1[:int(np.sum(s3))], s2[:int(np.sum(s3))], autojunk=False).ratio() * (

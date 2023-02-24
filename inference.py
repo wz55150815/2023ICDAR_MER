@@ -12,9 +12,9 @@ from typing import Union
 
 parser = argparse.ArgumentParser(description='Spatial channel attention')
 parser.add_argument('--config', default='config.yaml', type=str, help='配置文件路径')
-parser.add_argument('--image_path', default=r'.\data_inference\data\2014\img', type=str,
+parser.add_argument('--image_path', default=r'./data/off_image_test', type=str,
                     help='测试image路径')
-parser.add_argument('--label_path', default=r'.\data_inference\data\2014\caption.txt', type=str,
+parser.add_argument('--label_path', default=r'./data/test_caption.txt', type=str,
                     help='测试label路径')
 args = parser.parse_args()
 
@@ -33,14 +33,12 @@ params['word_num'] = tokenizer.vocab_size
 params['struct_num'] = 7
 params['words'] = words
 
-model = Backbone(params)
-model = model.to(device)
+model = Backbone(params).to(device).eval()
 checkpoints_root_path = Path("checkpoints")
 if (checkpoints_root_path / "model.pkl").exists():
     # load_checkpoint(model, None, sorted(checkpoints_root_path.glob('*'))[-1])
     model.load_state_dict(torch.load(checkpoints_root_path / "model.pkl"))
 
-model.eval()
 bad_case = {}
 
 
@@ -107,12 +105,11 @@ def inference(photo_root_path: Union[Path, str]) -> None:
         if file_path.is_file() and file_path.suffix in ['.jpg', '.jpeg', '.png', '.bmp']:
             img = cv2.imread(str(file_path))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            image = torch.Tensor(img) / 255
-            image = image[None, None, :, :]
+            image = (torch.Tensor(img) / 255)[None, None, :, :]
             image_mask = torch.ones(image.shape)
             image, image_mask = image.to(device), image_mask.to(device)
             prediction = model(image, image_mask)
-            latex_list = convert(1, prediction)
+            latex_list = convert(tokenizer.sos_id, prediction)
             print(file_path.name, ":", ' '.join(latex_list))
             if i == 30:
                 break
@@ -123,13 +120,12 @@ def model_eval():
     with open(args.label_path) as f:
         labels = f.readlines()
     with torch.no_grad():
-        labels_num = 0
         for item in tqdm(labels):
             name, *label = item.split()
             label = ' '.join(label)
             if name.endswith('.jpg'):
                 name = name.split('.')[0]
-            img = cv2.imread(os.path.join(args.image_path, name + '.bmp'))
+            img = cv2.imread(os.path.join(args.image_path, name + '_0.bmp'))
             img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             image = torch.Tensor(img) / 255
             image = image[None, None, :, :]
@@ -139,9 +135,10 @@ def model_eval():
 
             prediction = model(image, image_mask)
 
-            latex_list = convert(1, prediction)[:-1]  # 将结束符切掉
+            latex_list = convert(tokenizer.sos_id, prediction)
+            while latex_list.count("<eos>"):  # 去掉所有的eos token
+                latex_list.remove("<eos>")
             if latex_list is not None:
-                labels_num += 1
                 latex_string = ' '.join(latex_list)
                 if latex_string == label.strip():
                     exp_right += 1
@@ -154,12 +151,12 @@ def model_eval():
             else:
                 print("错误解析，跳过该条数据的计算")
 
-        print(exp_right / labels_num)
+        print(exp_right / len(labels))
 
 
 if __name__ == "__main__":
-    # model_eval()
+    model_eval()
     # with open('bad_case.json', 'w') as f:
     #     json.dump(bad_case, f, ensure_ascii=False)
-    inference(r".\data\off_image_train")
+    # inference(r"./data/off_image_train")
 

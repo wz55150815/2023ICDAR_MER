@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict
 import torch
 import pickle as pkl
@@ -8,8 +9,15 @@ class HYBTr_Dataset(Dataset):
 
     def __init__(self, params, image_path, label_path, words, is_train=True):
         super().__init__()
-        with open(image_path, 'rb') as f:
-            self.images = pkl.load(f)
+        try:
+            with open(image_path, 'rb') as f:
+                self.images = pkl.load(f)
+        except:
+            self.images = {}
+            for file_path in Path(image_path).glob('*.pkl'):
+                with open(file_path, 'rb') as f:
+                    self.images = {**self.images, **pkl.load(f)}
+
         with open(label_path, 'rb') as f:
             self.labels = pkl.load(f)
 
@@ -27,7 +35,6 @@ class HYBTr_Dataset(Dataset):
     def __getitem__(self, idx):
 
         name = self.name_list[idx]
-
         image = self.images[name]
 
         image = torch.Tensor(image) / 255
@@ -143,6 +150,8 @@ class Words:
 
         self.words_dict = {words[i].strip(): i for i in range(len(words))}
         self.words_index_dict = {i: words[i].strip() for i in range(len(words))}
+        self.frac_token = self.words_dict[r"\frac"]
+        self.sum_token = self.words_dict[r"\sum"]
         self.right_id = self.words_dict["right"]
         self.sos_id = self.words_dict["<sos>"]
         self.pad_id = self.words_dict["<pad>"]
@@ -162,7 +171,7 @@ class Words:
 
     @property
     def struct_ids(self) -> Dict:
-        structs = ("above", "below", "sub", "sup", "l_sup", "inside", "right")
+        structs = ("above", "below", "sub", "sup", "L-sup", "inside", "right")
         structs_dict = {x: self.words_dict[x] for x in structs}
         return structs_dict
 
@@ -172,5 +181,6 @@ class Words:
 
 
 tokenizer = Words(words_path=r"./data/dictionary.txt")
+
 
 
