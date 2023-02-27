@@ -1,50 +1,37 @@
 #!/usr/bin/env python
 
 import os
-import sys
+import glob
+from tqdm import tqdm
+import cv2
 import pickle as pkl
-from pathlib import Path
 
-import numpy
-# from scipy.misc import imread, imresize, imsave
-from imageio import imread
 
-image_path = '../data_comer/2016/img'
-# image_path='./off_image_test/' for test.pkl
-# outFile = 'offline-train.pkl'
-outFile = "train_2016"
-# outFile='offline-test.pkl'
+image_path = 'train_set_images'
+image_out = 'train_image.pkl'
+label_path = 'train_set_hyb'
+label_out = 'train_label.pkl'
 
-features = {}
+images = glob.glob(os.path.join(image_path, '*.jpg'))
+image_dict = {}
 
-channels = 1
+for item in tqdm(images):
 
-sentNum = 0
+    img = cv2.imread(item)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    image_dict[os.path.basename(item).replace('.jpg', '')] = img
 
-scpFile = open(image_path[:-3] + "caption.txt")
-# scpFile=open('test_caption.txt')
-while True:
-    line = scpFile.readline().strip()  # remove the '\r\n'
-    if not line:
-        break
-    else:
-        key = line.split('\t')[0]
-        # image_file = image_path + key + '_' + str(0) + '.bmp'
-        image_file = Path(image_path) / (key + '.bmp')
-        im = imread(image_file)
-        mat = numpy.zeros([channels, im.shape[0], im.shape[1]], dtype='uint8')
-        for channel in range(channels):
-            # image_file = image_path + key + '_' + str(channel) + '.bmp'
-            im = imread(image_file)
-            mat[channel, :, :] = im
-        sentNum = sentNum + 1
-        features[key] = mat
-        if sentNum / 500 == sentNum * 1.0 / 500:
-            print('process sentences ', sentNum)
+with open(image_out, 'wb') as f:
+    pkl.dump(image_dict, f)
 
-print('load images done. sentence number ', sentNum)
+labels = glob.glob(os.path.join(label_path, '*.txt'))
+label_dict = {}
 
-with open(outFile, "wb") as f:
-    pkl.dump(features, f)
-print('save file done')
+for item in tqdm(labels):
+    with open(item) as f:
+        lines = f.readlines()
+    label_dict[os.path.basename(item).replace('.txt', '')] = lines
+
+with open(label_out, 'wb') as f:
+    pkl.dump(label_dict, f)
 

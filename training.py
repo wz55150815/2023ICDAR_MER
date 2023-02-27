@@ -1,11 +1,11 @@
 import torch
 from tqdm import tqdm
 
+from distributed_utils import reduce_value
 from utils import updata_lr, Meter, cal_score
 
 
 def train(params, model, optimizer, epoch, train_loader, writer=None):
-
     model.train()
     device = params['device']
     loss_meter = Meter()
@@ -14,25 +14,24 @@ def train(params, model, optimizer, epoch, train_loader, writer=None):
 
     with tqdm(train_loader, total=len(train_loader)) as pbar:
         for batch_idx, (images, image_masks, labels, label_masks) in enumerate(pbar):
-
-            images, image_masks, labels, label_masks = images.to(device), image_masks.to(device), labels.to(
-                device), label_masks.to(device)
+            data = (images, image_masks, labels, label_masks)
+            images, image_masks, labels, label_masks = map(lambda x: x.to(device), data)
 
             batch, time = labels.shape[:2]
             if 'lr_decay' not in params or params['lr_decay'] == 'cosine':
                 updata_lr(optimizer, epoch, batch_idx, len(train_loader), params['epochs'], params['lr'])
-                pass
             optimizer.zero_grad()
-
             probs, loss = model(images, image_masks, labels, label_masks)
-
             word_loss, struct_loss, parent_loss, kl_loss = loss
             loss = (word_loss + struct_loss + parent_loss + kl_loss)
 
             loss.backward()
+
             # 对大于max_norm的梯度进行裁剪，防止训练过程不稳定
             if params['gradient_clip']:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=params['gradient'])
+            # 求得不同设备的loss均值
+            loss = reduce_value(loss, average=True)
 
             optimizer.step()
 
@@ -58,14 +57,14 @@ def train(params, model, optimizer, epoch, train_loader, writer=None):
                 writer.add_scalar('train/ExpRate', ExpRate, current_step)
                 writer.add_scalar('train/lr', optimizer.param_groups[0]['lr'], current_step)
 
-            pbar.set_description(f'Epoch: {epoch+1} train loss: {loss.item():.4f} word loss: {word_loss:.4f} '
+            pbar.set_description(f'Epoch: {epoch + 1} train loss: {loss.item():.4f} word loss: {word_loss:.4f} '
                                  f'struct loss: {struct_loss:.4f} parent loss: {parent_loss:.4f} '
                                  f'kl loss: {kl_loss:.4f} WordRate: {word_right / length:.4f} '
                                  f'structRate: {struct_right / length:.4f} ExpRate: {exp_right / cal_num:.4f}')
 
         if writer:
-            writer.add_scalar('epoch/train_loss', loss_meter.mean, epoch+1)
-            writer.add_scalar('epoch/train_WordRate', word_right / length, epoch+1)
+            writer.add_scalar('epoch/train_loss', loss_meter.mean, epoch + 1)
+            writer.add_scalar('epoch/train_WordRate', word_right / length, epoch + 1)
             writer.add_scalar('epoch/train_structRate', struct_right / length, epoch + 1)
             writer.add_scalar('epoch/train_ExpRate', exp_right / cal_num, epoch + 1)
         return loss_meter.mean, word_right / length, struct_right / length, exp_right / cal_num
@@ -113,9 +112,6 @@ def eval(params, model, epoch, eval_loader, writer=None):
             pbar.set_description(f'Epoch: {epoch + 1} eval loss: {loss.item():.4f} word loss: {word_loss:.4f} '
                                  f'struct loss: {struct_loss:.4f} WordRate: {word_right / length:.4f} '
                                  f'structRate: {struct_right / length:.4f} ExpRate: {exp_right / cal_num:.4f}')
-
-            # if batch_idx > 100:
-            #     break
 
         if writer:
             writer.add_scalar('epoch/eval_loss', loss_meter.mean, epoch + 1)

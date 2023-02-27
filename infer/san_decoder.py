@@ -12,11 +12,17 @@ class SAN_decoder(nn.Module):
         self.input_size = params['decoder']['input_size']
         self.hidden_size = params['decoder']['hidden_size']
         self.out_channel = params['encoder']['out_channels']
-        self.word_num = tokenizer.vocab_size
+        self.word_num = tokenizer.vocab_size + 1
         self.dropout_prob = params['dropout']
         self.device = params['device']
         self.struct_num = params['struct_num']
         self.struct_dict = tuple(tokenizer.struct_ids.values())
+
+        ##################################################################################
+        self.inside_tokens = [r'\sqrt', r"\textcircled", r"\boxed"]
+        self.above_tokens = [r"\xlongequal", r'\xrightarrow']
+        self.below_tokens = [r"\overline", r"\widehat", r"\dot", r"\overrightarrow"]
+        ##################################################################################
 
         self.ratio = params['densenet']['ratio'] if params['encoder']['net'] == 'DenseNet' else 16 * params['resnet']['conv1_stride']
 
@@ -99,7 +105,6 @@ class SAN_decoder(nn.Module):
                 word_prob = self.word_convert(word_out_state)
                 p_word = word
                 word = word_prob.max(-1)[-1]
-                # if word.item() and word.item() != 2:
                 if word.item() and word.item() != tokenizer.struct_id:
                     cid += 1
                     p_id = cid
@@ -107,7 +112,6 @@ class SAN_decoder(nn.Module):
                     prediction = prediction + tokenizer.words_index_dict[word.item()] + ' '
 
                 # 当预测文字为结构符
-                # if word.item() == 2:
                 if word.item() == tokenizer.struct_id:
 
                     struct_prob = self.struct_convert(word_out_state)
@@ -132,11 +136,17 @@ class SAN_decoder(nn.Module):
                         p_re = 'Sup'  # 上标
                         prediction = prediction + '^ { '
                         right_brace += 1
-                    elif word == tokenizer.struct_ids["above"] and p_word.item() == tokenizer.frac_token:
+
+                    ##################################################################################
+                    # elif word == tokenizer.struct_ids["above"] and p_word.item() == tokenizer.frac_token:
+                    elif word == tokenizer.struct_ids["above"] and p_word.item() in self.above_tokens:
+                        ##################################################################################
+
                         p_re = 'Above'
                         prediction = prediction + '{ '
                         right_brace += 1
-                    elif word == tokenizer.struct_ids["below"] and p_word.item() == tokenizer.frac_token:
+                    # elif word == tokenizer.struct_ids["below"] and p_word.item() == tokenizer.frac_token:
+                    elif word == tokenizer.struct_ids["below"] and p_word.item() == self.below_tokens:
                         p_re = 'Below'
                         prediction = prediction + '{ '
                         right_brace += 1
@@ -153,11 +163,11 @@ class SAN_decoder(nn.Module):
                         if right_brace != 0:
                             for _ in range(right_brace):
                                 prediction = prediction + '} '
-                        break
+                        break  # 表示一个结构，例如sum结构解析完
                     word, parent_hidden, p_word, pid, word_alpha_sum = struct_list.pop()
                     word_embedding = self.embedding(torch.LongTensor([word]).to(device=self.device))
                     if word == tokenizer.struct_ids["inside"]:
-                        prediction = prediction + '] { '  # 为什么是加']'？
+                        prediction = prediction + '] { '
                         right_brace += 1
                         p_re = 'Inside'
                     elif word == tokenizer.struct_ids["sub"] or (word == tokenizer.struct_ids["below"] and p_word.item() == tokenizer.sum_token):
@@ -180,7 +190,12 @@ class SAN_decoder(nn.Module):
                                 right_brace -= 1
                         prediction = prediction + '^ { '
                         right_brace += 1
-                    elif word == tokenizer.struct_ids["above"] and p_word.item() == tokenizer.frac_token:
+
+                    ######################################################################################
+                    # elif word == tokenizer.struct_ids["above"] and p_word.item() == tokenizer.frac_token:
+                    elif word == tokenizer.struct_ids["above"] and p_word.item() in self.above_tokens:
+                        ##################################################################################
+
                         p_re = 'Above'
                         prediction += '} '
                         right_brace -= 1
@@ -190,7 +205,12 @@ class SAN_decoder(nn.Module):
                                 right_brace -= 1
                         prediction = prediction + '{ '
                         right_brace += 1
-                    elif word == tokenizer.struct_ids["below"] and p_word.item() == tokenizer.frac_token:
+
+                    #######################################################################################
+                    # elif word == tokenizer.struct_ids["below"] and p_word.item() == tokenizer.frac_token:
+                    elif word == tokenizer.struct_ids["below"] and p_word.item() == self.below_tokens:
+                        ##################################################################################
+
                         p_re = 'Below'
                         prediction += '} '
                         right_brace -= 1

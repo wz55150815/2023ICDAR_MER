@@ -6,7 +6,7 @@ seed: 20200814
 
 # 训练参数
 epochs: 200
-batch_size: 6
+batch_size: 2
 workers: 0
 optimizer: Adadelta
 lr: 1
@@ -16,7 +16,7 @@ eps: 1e-6
 weight_decay: 1e-4
 beta: 0.9
 image_resize: True
-image_width: 1600
+image_width: 800
 image_height: 320
 image_channel: 1
 dropout: True
@@ -27,10 +27,10 @@ gradient_clip: True
 use_label_mask: False
 
 # 训练数据
-train_image_path: './data/train_pkl'
-train_label_path: './data/train_labels.pkl'
-eval_image_path: './data/offline-test.pkl'
-eval_label_path: './data/test_labels.pkl'
+train_image_path: './data/train_image.pkl'
+train_label_path: './data/train_label.pkl'
+eval_image_path: './data/train_image.pkl'
+eval_label_path: './data/train_label.pkl'
 
 word_path: './/data//dictionary.txt'
 
@@ -54,12 +54,12 @@ densenet:
 decoder:
   net: SAN_decoder
   cell: 'GRU'
-  input_size: 256
-  hidden_size: 256
+  input_size: 128
+  hidden_size: 128
 
 # attention 参数
 attention:
-  attention_dim: 512
+  attention_dim: 100
 
 # hybrid tree
 hybrid_tree:
@@ -69,7 +69,7 @@ hybrid_tree:
 optimizer_save: True
 checkpoint_dir: 'checkpoints'
 finetune: True
-checkpoint: "model_last"
+checkpoint: ""
 
 # tensorboard路径
 log_dir: 'logs'

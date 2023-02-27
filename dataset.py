@@ -1,22 +1,16 @@
+import torch
+import cv2
 from pathlib import Path
 from typing import Dict
-import torch
 import pickle as pkl
+import multiprocessing
 from torch.utils.data import DataLoader, Dataset
 
 
 class HYBTr_Dataset(Dataset):
-
     def __init__(self, params, image_path, label_path, words, is_train=True):
-        super().__init__()
-        try:
-            with open(image_path, 'rb') as f:
-                self.images = pkl.load(f)
-        except:
-            self.images = {}
-            for file_path in Path(image_path).glob('*.pkl'):
-                with open(file_path, 'rb') as f:
-                    self.images = {**self.images, **pkl.load(f)}
+        with open(image_path, 'rb') as f:
+            self.images = pkl.load(f)
 
         with open(label_path, 'rb') as f:
             self.labels = pkl.load(f)
@@ -35,7 +29,10 @@ class HYBTr_Dataset(Dataset):
     def __getitem__(self, idx):
 
         name = self.name_list[idx]
-        image = self.images[name]
+        try:
+            image = cv2.cvtColor(self.images[name], cv2.COLOR_BGR2GRAY)
+        except cv2.error:  # 图像已经经过上面的函数出来了
+            image = self.images[name]
 
         image = torch.Tensor(image) / 255
         if len(image.shape) == 2:
@@ -43,37 +40,37 @@ class HYBTr_Dataset(Dataset):
 
         label = self.labels[name]
 
-        # child_words = [item.split()[1] for item in label]
-        # child_words = self.words.encode(child_words)
-        # child_words = torch.LongTensor(child_words)
-        # child_ids = [int(item.split()[0]) for item in label]
-        # child_ids = torch.LongTensor(child_ids)
-        #
-        # parent_words = [item.split()[3] for item in label]
-        # parent_words = self.words.encode(parent_words)
-        # parent_words = torch.LongTensor(parent_words)
-        # parent_ids = [int(item.split()[2]) for item in label]
-        # parent_ids = torch.LongTensor(parent_ids)
-
-        child_words, child_ids, parent_words, parent_ids, struct_label = [], [], [], [], []
-        for line in label.split("\n"):
-            if line != "":
-                child_words.append(line.split()[1])
-                child_ids.append(line.split()[0])
-                parent_words.append(line.split()[3])
-                parent_ids.append(line.split()[2])
-                struct_label.append(line.split()[4:])
-            else:
-                break
-
+        child_words = [item.split()[1] for item in label]
         child_words = self.words.encode(child_words)
         child_words = torch.LongTensor(child_words)
-        child_ids = torch.LongTensor([int(i) for i in child_ids])
+        child_ids = [int(item.split()[0]) for item in label]
+        child_ids = torch.LongTensor(child_ids)
+
+        parent_words = [item.split()[3] for item in label]
         parent_words = self.words.encode(parent_words)
         parent_words = torch.LongTensor(parent_words)
-        parent_ids = torch.LongTensor([int(i) for i in parent_ids])
+        parent_ids = [int(item.split()[2]) for item in label]
+        parent_ids = torch.LongTensor(parent_ids)
 
-        # struct_label = [item.split()[4:] for item in label]
+        # child_words, child_ids, parent_words, parent_ids, struct_label = [], [], [], [], []
+        # for line in label.split("\n"):
+        #     if line != "":
+        #         child_words.append(line.split()[1])
+        #         child_ids.append(line.split()[0])
+        #         parent_words.append(line.split()[3])
+        #         parent_ids.append(line.split()[2])
+        #         struct_label.append(line.split()[4:])
+        #     else:
+        #         break
+        #
+        # child_words = self.words.encode(child_words)
+        # child_words = torch.LongTensor(child_words)
+        # child_ids = torch.LongTensor([int(i) for i in child_ids])
+        # parent_words = self.words.encode(parent_words)
+        # parent_words = torch.LongTensor(parent_words)
+        # parent_ids = torch.LongTensor([int(i) for i in parent_ids])
+
+        struct_label = [item.split()[4:] for item in label]
         struct = torch.zeros((len(struct_label), len(struct_label[0]))).long()
         for i in range(len(struct_label)):
             for j in range(len(struct_label[0])):
@@ -119,22 +116,25 @@ class HYBTr_Dataset(Dataset):
 
 def get_dataset(params):
 
-    words = Words(params['word_path'])
-
+    words = tokenizer
+    num_gpus = torch.cuda.device_count()
     params['word_num'] = len(words)
-    params['struct_num'] = 7
+    params['struct_num'] = len(tokenizer.struct_ids)
     print(f"training data，images: {params['train_image_path']} labels: {params['train_label_path']}")
     print(f"test data，images: {params['eval_image_path']} labels: {params['eval_label_path']}")
     train_dataset = HYBTr_Dataset(params, params['train_image_path'], params['train_label_path'], words)
     eval_dataset = HYBTr_Dataset(params, params['eval_image_path'], params['eval_label_path'], words)
+    # 给每个rank对应的进程分配训练的样本索引
+    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    eval_sampler = torch.utils.data.distributed.DistributedSampler(eval_dataset)
+    # 将样本索引每batch_size个元素组成一个list
+    train_batch_sampler = torch.utils.data.BatchSampler(
+        train_sampler, params['batch_size'], drop_last=True)
 
-    # train_sampler = RandomSampler(train_dataset)
-    # eval_sampler = RandomSampler(eval_dataset)
-
-    train_loader = DataLoader(train_dataset, batch_size=params['batch_size'], shuffle=True,
-                              num_workers=params['workers'], collate_fn=train_dataset.collate_fn)
-    eval_loader = DataLoader(eval_dataset, batch_size=params['batch_size'], shuffle=True,
-                             num_workers=params['workers'], collate_fn=eval_dataset.collate_fn)
+    train_loader = DataLoader(train_dataset, batch_sampler=train_batch_sampler, pin_memory=True,
+                              num_workers=0, collate_fn=train_dataset.collate_fn)
+    eval_loader = DataLoader(eval_dataset, batch_size=params['batch_size'], sampler=eval_sampler, pin_memory=True,
+                             num_workers=0, collate_fn=eval_dataset.collate_fn)
 
     print(f'train dataset: {len(train_dataset)} train steps: {len(train_loader)} '
           f'eval dataset: {len(eval_dataset)} eval steps: {len(eval_loader)}')

@@ -12,7 +12,7 @@ class SAN_decoder(nn.Module):
         self.input_size = params['decoder']['input_size']
         self.hidden_size = params['decoder']['hidden_size']
         self.out_channel = params['encoder']['out_channels']
-        self.word_num = params['word_num']
+        self.word_num = tokenizer.vocab_size + 1
         self.dropout_prob = params['dropout']
         self.device = params['device']
         self.struct_num = params['struct_num']
@@ -27,7 +27,7 @@ class SAN_decoder(nn.Module):
         self.init_weight = nn.Linear(self.out_channel, self.hidden_size)
 
         # word embedding
-        self.embedding = nn.Embedding(self.word_num, self.input_size)
+        self.embedding = nn.Embedding(self.word_num, self.input_size, padding_idx=tokenizer.pad_id)
 
         # word gru
         self.word_input_gru = nn.GRUCell(self.input_size, self.hidden_size)
@@ -181,7 +181,7 @@ class SAN_decoder(nn.Module):
                     word, parent_hidden, word_alpha_sum = struct_list.pop()
                     word_embedding = self.embedding(torch.LongTensor([word]).to(device=self.device))
 
-                elif word == self.words.sos_id:  # 0
+                elif word == self.words.sos_id:
                     if len(struct_list) == 0:
                         break
                     word, parent_hidden, word_alpha_sum = struct_list.pop()

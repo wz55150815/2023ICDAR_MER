@@ -11,6 +11,8 @@ from difflib import SequenceMatcher
 from einops import rearrange
 from torch import nn
 
+from distributed_utils import reduce_value
+
 
 def load_config(yaml_path):
     try:
@@ -150,6 +152,8 @@ def cal_score(probs, labels, mask):
         else:
             if word_scores[i] == 1:
                 line_right += 1
+    #求得多个设备计算的正确数的和
+    line_right = reduce_value(line_right, average=False)
 
     ExpRate = line_right / batch_size
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from utils import load_config, load_checkpoint
 from infer.Backbone import Backbone
 from dataset import tokenizer
-from typing import Union
+from typing import Union, List, Optional
 
 parser = argparse.ArgumentParser(description='Spatial channel attention')
 parser.add_argument('--config', default='config.yaml', type=str, help='配置文件路径')
@@ -28,21 +28,21 @@ params = load_config(args.config)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 params['device'] = device
 
-words = tokenizer
 params['word_num'] = tokenizer.vocab_size
-params['struct_num'] = 7
-params['words'] = words
+params['struct_num'] = len(tokenizer.struct_ids)
+params['words'] = tokenizer
 
 model = Backbone(params).to(device).eval()
 checkpoints_root_path = Path("checkpoints")
-if (checkpoints_root_path / "model.pkl").exists():
-    # load_checkpoint(model, None, sorted(checkpoints_root_path.glob('*'))[-1])
-    model.load_state_dict(torch.load(checkpoints_root_path / "model.pkl"))
+if (checkpoints_root_path / "many_card/model.pkl").exists():
+    print('loading pretrain model weight')
+    state_dict = torch.load(checkpoints_root_path / "many_card/model.pkl")
+    model.load_state_dict(state_dict)
 
 bad_case = {}
 
 
-def convert(nodeid, gtd_list):
+def convert(nodeid: int, gtd_list: List) -> Optional[str, List]:
     isparent = False
     child_list = []
     for i in range(len(gtd_list)):
@@ -55,7 +55,11 @@ def convert(nodeid, gtd_list):
         except IndexError:
             return
     else:
-        if gtd_list[nodeid][0] == '\\frac':
+        ######################################################################################
+        # if gtd_list[nodeid][0] == '\\frac':
+        if gtd_list[nodeid][0] in model.decoder.above_tokens + model.decoder.below_tokens:
+            ######################################################################################
+
             return_string = [gtd_list[nodeid][0]]
             for i in range(len(child_list)):
                 if child_list[i][2] == 'Above':
@@ -159,4 +163,3 @@ if __name__ == "__main__":
     # with open('bad_case.json', 'w') as f:
     #     json.dump(bad_case, f, ensure_ascii=False)
     # inference(r"./data/off_image_train")
-
