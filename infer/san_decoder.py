@@ -12,7 +12,7 @@ class SAN_decoder(nn.Module):
         self.input_size = params['decoder']['input_size']
         self.hidden_size = params['decoder']['hidden_size']
         self.out_channel = params['encoder']['out_channels']
-        self.word_num = tokenizer.vocab_size + 1
+        self.word_num = params["max_token_num"]
         self.dropout_prob = params['dropout']
         self.device = params['device']
         self.struct_num = params['struct_num']

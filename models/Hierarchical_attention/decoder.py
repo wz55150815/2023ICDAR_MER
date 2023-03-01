@@ -12,7 +12,8 @@ class SAN_decoder(nn.Module):
         self.input_size = params['decoder']['input_size']
         self.hidden_size = params['decoder']['hidden_size']
         self.out_channel = params['encoder']['out_channels']
-        self.word_num = tokenizer.vocab_size + 1
+        # 加30是给dictionary中没有的字符预留空间
+        self.word_num = params["max_token_num"]
         self.dropout_prob = params['dropout']
         self.device = params['device']
         self.struct_num = params['struct_num']
@@ -89,6 +90,7 @@ class SAN_decoder(nn.Module):
                 word_alpha_sum = word_alpha_sums[parent_ids, :, :, :]
 
                 # 给一个batch的parent_words嵌入维度，这里全部是真实值，可以考虑变成概率(随机真实值或者是模型上一次的预测结果)
+
                 word_embedding = self.embedding(labels[:, i, 3])
 
                 # word
@@ -111,9 +113,11 @@ class SAN_decoder(nn.Module):
                 for num in range(relation.shape[0]):
                     if labels[num, -(i + 1), 1] == self.words.struct_id:  # 每个batch的children判断是否为结构字符struct
                         relation[num] = self.words.struct_id
+
                     # 不是right...等字符且不是<sos>开始符
                     elif relation[num].item() not in tuple(self.words.struct_ids.values()) and relation[num].item() != self.words.sos_id:
                         relation[num] = self.words.right_id
+
                 relation_embedding = self.embedding(relation)
 
                 c2p_hidden_first = self.c2p_input_gru(torch.cat((child_embedding, relation_embedding), dim=1),

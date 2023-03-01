@@ -16,7 +16,7 @@ eps: 1e-6
 weight_decay: 1e-4
 beta: 0.9
 image_resize: True
-image_width: 800
+image_width: 1600
 image_height: 320
 image_channel: 1
 dropout: True
@@ -25,6 +25,7 @@ relu: True
 gradient: 100
 gradient_clip: True
 use_label_mask: False
+max_token_num: 250
 
 # 训练数据
 train_image_path: './data/train_image.pkl'
@@ -54,8 +55,8 @@ densenet:
 decoder:
   net: SAN_decoder
   cell: 'GRU'
-  input_size: 128
-  hidden_size: 128
+  input_size: 100
+  hidden_size: 100
 
 # attention 参数
 attention:

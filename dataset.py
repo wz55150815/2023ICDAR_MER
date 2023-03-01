@@ -16,6 +16,7 @@ class HYBTr_Dataset(Dataset):
             self.labels = pkl.load(f)
 
         self.name_list = list(self.labels.keys())
+
         self.words = words
         self.max_width = params['image_width']
         self.is_train = is_train
@@ -29,6 +30,11 @@ class HYBTr_Dataset(Dataset):
     def __getitem__(self, idx):
 
         name = self.name_list[idx]
+        if len(self.labels[name]) == 0:  # 标签为空，有问题
+            idx -= 1
+            print(f"{name} label has some problem， skipping it")
+        name = self.name_list[idx]
+
         try:
             image = cv2.cvtColor(self.images[name], cv2.COLOR_BGR2GRAY)
         except cv2.error:  # 图像已经经过上面的函数出来了
@@ -118,22 +124,16 @@ def get_dataset(params):
 
     words = tokenizer
     num_gpus = torch.cuda.device_count()
-    params['word_num'] = len(words)
+    params['word_num'] = params["max_token_num"]
     params['struct_num'] = len(tokenizer.struct_ids)
     print(f"training data，images: {params['train_image_path']} labels: {params['train_label_path']}")
     print(f"test data，images: {params['eval_image_path']} labels: {params['eval_label_path']}")
     train_dataset = HYBTr_Dataset(params, params['train_image_path'], params['train_label_path'], words)
     eval_dataset = HYBTr_Dataset(params, params['eval_image_path'], params['eval_label_path'], words)
-    # 给每个rank对应的进程分配训练的样本索引
-    train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    eval_sampler = torch.utils.data.distributed.DistributedSampler(eval_dataset)
-    # 将样本索引每batch_size个元素组成一个list
-    train_batch_sampler = torch.utils.data.BatchSampler(
-        train_sampler, params['batch_size'], drop_last=True)
 
-    train_loader = DataLoader(train_dataset, batch_sampler=train_batch_sampler, pin_memory=True,
+    train_loader = DataLoader(train_dataset, batch_size=params['batch_size'] * num_gpus, shuffle=True,
                               num_workers=0, collate_fn=train_dataset.collate_fn)
-    eval_loader = DataLoader(eval_dataset, batch_size=params['batch_size'], sampler=eval_sampler, pin_memory=True,
+    eval_loader = DataLoader(eval_dataset, batch_size=params['batch_size'] * num_gpus, shuffle=True,
                              num_workers=0, collate_fn=eval_dataset.collate_fn)
 
     print(f'train dataset: {len(train_dataset)} train steps: {len(train_loader)} '
@@ -144,10 +144,15 @@ def get_dataset(params):
 
 class Words:
     def __init__(self, words_path):
-        with open(words_path) as f:
-            words = f.readlines()
-            print(f'{len(words)} symbols in total')
+        try:
+            with open(words_path, encoding="gb18030") as f:
+                words = f.readlines()
+        except UnicodeError:
+            with open(words_path, encoding="utf-8") as f:
+                words = f.readlines()
+        print(f'{len(words)} symbols in total')
 
+        self.words_path = words_path
         self.words_dict = {words[i].strip(): i for i in range(len(words))}
         self.words_index_dict = {i: words[i].strip() for i in range(len(words))}
         self.frac_token = self.words_dict[r"\frac"]
@@ -162,7 +167,26 @@ class Words:
         return len(self.words_dict)
 
     def encode(self, labels):
-        label_index = [self.words_dict[item] for item in labels]
+        # label_index = [self.words_dict[item] for item in labels]
+
+        label_index = []
+        for item in labels:
+            try:
+                label_index.append(self.words_dict[item])
+            except KeyError:
+                with open(self.words_path, "a") as f:
+                    f.write("\n")
+                    f.write(item)
+                try:
+                    with open(self.words_path, encoding="gb18030") as f:
+                        words = f.readlines()
+                except UnicodeError:
+                    with open(self.words_path, encoding="utf-8") as f:
+                        words = f.readlines()
+                self.words_dict = {words[i].strip(): i for i in range(len(words))}  # 重新更新字典
+                label_index.append(self.words_dict[item])
+                print(f"warning: dictionary.txt don't have{item}, already update")
+
         return label_index
 
     def decode(self, label_index):

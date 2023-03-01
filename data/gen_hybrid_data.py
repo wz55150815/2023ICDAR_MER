@@ -14,6 +14,7 @@ class Tree:
         self.op = op
 
 
+# label = '..//data_comer//2016//caption.txt'
 label = 'train_set_labels.txt'
 out = 'train_set_hyb'
 
